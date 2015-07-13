@@ -22,12 +22,12 @@ private[sbt] object JsonUtil {
           throw e
       }
     }
-  def writeUpdateReport(ur: UpdateReport, graphPath: File): Unit =
+  def writeUpdateReport(ur: UpdateReport, graphPath: File, log: Logger): Unit =
     {
       IO.createDirectory(graphPath.getParentFile)
-      toJsonFile(toLite(ur), graphPath)
+      toJsonFile(toLite(ur, log), graphPath)
     }
-  def toLite(ur: UpdateReport): UpdateReportLite =
+  private def toLite(ur: UpdateReport, log: Logger): UpdateReportLite =
     UpdateReportLite(ur.configurations map { cr =>
       ConfigurationReportLite(cr.configuration, cr.details map { oar =>
         new OrganizationArtifactReport(oar.organization, oar.name, oar.modules map { mr =>
@@ -37,24 +37,48 @@ private[sbt] object JsonUtil {
             mr.evicted, mr.evictedData, mr.evictedReason,
             mr.problem, mr.homepage, mr.extraAttributes,
             mr.isDefault, mr.branch, mr.configurations, mr.licenses,
-            filterOutArtificialCallers(mr.callers))
+            if(evicted) filterOutArtificialCallers(mr.callers, log) else Seq.empty)
         })
       })
     })
   // #1763/#2030. Caller takes up 97% of space, so we need to shrink it down,
   // but there are semantics associated with some of them.
-  def filterOutArtificialCallers(callers: Seq[Caller]): Seq[Caller] =
-    if (callers.isEmpty) callers
-    else {
-      val nonArtificial = callers filter { c =>
+  def filterOutArtificialCallers(callers: Seq[Caller], log: Logger): Seq[Caller] = {
+    //println(s"!! [filterOutArtificialCallers] ---- || prove that the filtering is the cause of the issue return an empty Seq - caller size: ${callers.size}")
+    //Seq.empty
+    //}
+    //{
+
+    val forceEmptyCallers = java.lang.System.getenv("FORCE_EMPTY_CALLERS") != null
+    if (callers.isEmpty || forceEmptyCallers) {
+      log.debug(s"forceEmptyCallers: $forceEmptyCallers")
+      Seq.empty
+    } else {
+      log.debug(s"[filterOutArtificialCallers] callers.size: ${callers.size}")
+
+      val nonArtificial = callers.filter { c =>
         (c.caller.organization != sbtOrgTemp) &&
           (c.caller.organization != fakeCallerOrganization)
-      }
+      }.distinct
+
+      log.debug(s"[filterOutArtificialCallers] nonArtificial.size: ${nonArtificial.size}")
+
       val interProj = (callers filter { c =>
         (c.caller.organization == sbtOrgTemp)
       }).headOption.toList
-      interProj ::: nonArtificial.toList
+
+      val out = interProj ::: nonArtificial.toList
+      //val out = nonArtificial.toList
+
+      /*if(out.lengthCompare(1000) == 1){
+        log.debug("!!-------------")
+        log.debug(callers)
+      }*/
+
+      log.debug(s"[filterOutArtificialCallers] return out.size: ${out.size}")
+      out
     }
+  }
 
   def fromLite(lite: UpdateReportLite, cachedDescriptor: File): UpdateReport =
     {

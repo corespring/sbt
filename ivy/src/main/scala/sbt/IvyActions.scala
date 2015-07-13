@@ -152,12 +152,14 @@ object IvyActions {
    * 'updateConfig' configures the actual resolution and retrieval process.
    */
   @deprecated("This is no longer public.", "0.13.6")
-  def update(module: IvySbt#Module, configuration: UpdateConfiguration, log: Logger): UpdateReport =
+  def update(module: IvySbt#Module, configuration: UpdateConfiguration, log: Logger): UpdateReport = {
+    log.debug(s"--------!! Update: $module")
     updateEither(module, configuration, UnresolvedWarningConfiguration(), LogicalClock.unknown, None, log) match {
       case Right(r) => r
       case Left(w) =>
         throw w.resolveException
     }
+  }
 
   /**
    * Resolves and retrieves dependencies.  'ivyConfig' is used to produce an Ivy file and configuration.
@@ -175,6 +177,7 @@ object IvyActions {
             val resolveId = ResolveOptions.getDefaultResolveId(md)
             resolveOptions.setResolveId(resolveId)
             resolveOptions.setLog(ivyLogLevel(configuration.logging))
+            log.debug(s"call customResolve for: $md")
             x.customResolve(md, configuration.missingOk, logicalClock, resolveOptions, depDir getOrElse { sys.error("dependency base directory is not specified") }, log) match {
               case Left(x) =>
                 Left(UnresolvedWarning(x, uwconfig))

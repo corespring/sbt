@@ -161,8 +161,9 @@ private[sbt] class CachedResolutionResolveCache() {
         else if (dynamicGraphPath.exists) Some(dynamicGraphPath)
         else None) match {
           case Some(path) =>
-            log.debug(s"parsing ${path.getAbsolutePath.toString}")
+            log.debug(s"!! parsing ${path.getAbsolutePath.toString}")
             val ur = JsonUtil.parseUpdateReport(md, path, cachedDescriptor, log)
+            log.debug(s" -- parsing completed for ${path.getAbsolutePath.toString}")
             if (ur.allFiles forall { _.exists }) {
               updateReportCache(md.getModuleRevisionId) = Right(ur)
               Some(Right(ur))
@@ -196,7 +197,7 @@ private[sbt] class CachedResolutionResolveCache() {
               if (changing) {
                 cleanDynamicGraph()
               }
-              JsonUtil.writeUpdateReport(ur, gp)
+              JsonUtil.writeUpdateReport(ur, gp, log)
               // limit the update cache size
               if (updateReportCache.size > maxUpdateReportCacheSize) {
                 updateReportCache.remove(updateReportCache.head._1)
@@ -284,6 +285,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
    */
   def customResolve(md0: ModuleDescriptor, missingOk: Boolean, logicalClock: LogicalClock, options0: ResolveOptions, depDir: File, log: Logger): Either[ResolveException, UpdateReport] =
     cachedResolutionResolveCache.getOrElseUpdateProjectReport(md0.getModuleRevisionId, logicalClock) {
+      log.debug("[customResolve] update project report for module: ${md0.getModuleRevisionId}, clock: $logicalClock")
       import Path._
       val start = System.currentTimeMillis
       val miniGraphPath = depDir / "module"
@@ -297,6 +299,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
       def doWork(md: ModuleDescriptor, dd: DependencyDescriptor): Either[ResolveException, UpdateReport] =
         cache.internalDependency(dd, projectResolver) match {
           case Some(md1) =>
+            log.debug(s"[doWork] use customResolve for: $md1")
             log.debug(s":: call customResolve recursively: $dd")
             customResolve(md1, missingOk, logicalClock, options0, depDir, log) match {
               case Right(ur) => Right(remapInternalProject(new IvyNode(data, md1), ur, md0, dd, os, log))
@@ -308,6 +311,8 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
         }
       def doWorkUsingIvy(md: ModuleDescriptor): Either[ResolveException, UpdateReport] =
         {
+          log.debug(s"[doWorkUsingIvy] $md")
+
           val options1 = new ResolveOptions(options0)
           var rr = withIvy(log) { ivy =>
             ivy.resolve(md, options1)
@@ -328,10 +333,12 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
           }
         }
       val results = mds map {
-        case (md, changing, dd) =>
+        case (md, changing, dd) => {
+          log.debug(s"call cache.getOrElseUpdateMiniGraph for module: $md using path: $miniGraphPath")
           cache.getOrElseUpdateMiniGraph(md, changing, logicalClock, miniGraphPath, cachedDescriptor, log) {
             doWork(md, dd)
           }
+        }
       }
       val uReport = mergeResults(md0, results, missingOk, System.currentTimeMillis - start, os, log)
       val cacheManager = getSettings.getResolutionCacheManager
@@ -361,7 +368,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
     }
   def mergeReports(md0: ModuleDescriptor, reports: Vector[UpdateReport], resolveTime: Long, os: Vector[IvyOverride], log: Logger): UpdateReport =
     {
-      log.debug(s":: merging update reports")
+      log.debug(s":: merging update reports for: $md0")
       val cachedDescriptor = getSettings.getResolutionCacheManager.getResolvedIvyFileInCache(md0.getModuleRevisionId)
       val rootModuleConfigs = md0.getConfigurations.toVector
       val cachedReports = reports filter { !_.stats.cached }
@@ -398,7 +405,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
       // group by takes up too much memory. trading space with time.
       val orgNamePairs = (reports0 map { oar => (oar.organization, oar.name) }).distinct
       // this might take up some memory, but it's limited to a single
-      val reports1 = reports0 map { filterOutCallers }
+      val reports1 = reports0 map { filterOutCallers(log) }
       val allModules: ListMap[(String, String), Vector[OrganizationArtifactReport]] =
         ListMap(orgNamePairs map {
           case (organization, name) =>
@@ -450,13 +457,13 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
       val result = resolveConflicts(sorted.toList)
       result.toVector
     }
-  def filterOutCallers(report0: OrganizationArtifactReport): OrganizationArtifactReport =
+  def filterOutCallers(log: Logger)(report0: OrganizationArtifactReport): OrganizationArtifactReport =
     OrganizationArtifactReport(
       report0.organization,
       report0.name,
       report0.modules map { mr =>
         // https://github.com/sbt/sbt/issues/1763
-        mr.copy(callers = JsonUtil.filterOutArtificialCallers(mr.callers))
+        mr.copy(callers = JsonUtil.filterOutArtificialCallers(mr.callers, log))
       })
   /**
    * Merges ModuleReports, which represents orgnization, name, and version.

@@ -9,13 +9,14 @@ class CachedResolutionSpec extends BaseIvySpecification {
 
   Resolving the same module twice should
     work                                                        $e1
+  """
 
-  Resolving the unsolvable module should
+  /*Resolving the unsolvable module should
     not work                                                    $e2
 
   Resolving a module with a pseudo-conflict should
     work                                                        $e3
-                                                                """
+                                                                """*/
 
   def commonsIo13 = ModuleID("commons-io", "commons-io", "1.3", Some("compile"))
   def mavenCayennePlugin302 = ModuleID("org.apache.cayenne.plugins", "maven-cayenne-plugin", "3.0.2", Some("compile"))
@@ -28,19 +29,36 @@ class CachedResolutionSpec extends BaseIvySpecification {
   import ShowLines._
 
   def e1 = {
+    log.setLevel(Level.Debug)
     val m = module(ModuleID("com.example", "foo", "0.1.0", Some("compile")),
       Seq(commonsIo13), Some("2.10.2"), UpdateOptions().withCachedResolution(true))
+    val m2 = module(ModuleID("com.example", "bar", "0.1.0", Some("compile")),
+      Seq(commonsIo13), Some("2.10.2"), UpdateOptions().withCachedResolution(true))
+    println("update 1")
+
     val report = ivyUpdate(m)
-    cleanCachedResolutionCache(m)
-    val report2 = ivyUpdate(m)
-    // first resolution creates the minigraph
+    println("report:")
     println(report)
+
+    cleanCachedResolutionCache(m)
+
+    println("update 2")
+    val report2 = ivyUpdate(m)
+    println("2nd report:")
+    println(report2)
+
+    println("update 3")
+    val report3 = ivyUpdate(m2)
+    println("3rd report")
+    println(report3)
+
+    // first resolution creates the minigraph
     // second resolution reads from the minigraph
     println(report.configurations.head.modules.head.artifacts)
     report.configurations.size must_== 3
   }
 
-  def e2 = {
+  /*def e2 = {
     // log.setLevel(Level.Debug)
     val m = module(ModuleID("com.example", "foo", "0.2.0", Some("compile")),
       Seq(mavenCayennePlugin302), Some("2.10.2"), UpdateOptions().withCachedResolution(true))
@@ -58,12 +76,13 @@ class CachedResolutionSpec extends BaseIvySpecification {
           "\t\t  +- org.apache.cayenne.plugins:maven-cayenne-plugin:3.0.2",
           "\t\t  +- com.example:foo:0.2.0"))
     }
-  }
+  }*/
 
   // https://github.com/sbt/sbt/issues/2046
   // data-avro:1.9.40 depends on avro:1.4.0, which depends on netty:3.2.1.Final.
   // avro:1.4.0 will be evicted by avro:1.7.7.
   // #2046 says that netty:3.2.0.Final is incorrectly evicted by netty:3.2.1.Final
+  /* 
   def e3 = {
     log.setLevel(Level.Debug)
     val m = module(ModuleID("com.example", "foo", "0.3.0", Some("compile")),
@@ -77,4 +96,5 @@ class CachedResolutionSpec extends BaseIvySpecification {
     val modules = report.configurations.head.modules
     modules must containMatch("""org\.jboss\.netty:netty:3\.2\.0.Final""")
   }
+  */
 }
