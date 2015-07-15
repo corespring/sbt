@@ -315,6 +315,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
 
           val options1 = new ResolveOptions(options0)
           var rr = withIvy(log) { ivy =>
+            log.debug(s"call ivy.resolve for md: $md, options: $options1")
             ivy.resolve(md, options1)
           }
           if (!rr.hasError || missingOk) Right(IvyRetrieve.updateReport(rr, cachedDescriptor))
@@ -463,7 +464,7 @@ private[sbt] trait CachedResolutionResolveEngine extends ResolveEngine {
       report0.name,
       report0.modules map { mr =>
         // https://github.com/sbt/sbt/issues/1763
-        mr.copy(callers = JsonUtil.filterOutArtificialCallers(mr.callers, log))
+        mr.copy(callers = JsonUtil.filterOutArtificialCallers(report0.modules.map { _.module }, mr.callers, log))
       })
   /**
    * Merges ModuleReports, which represents orgnization, name, and version.

@@ -162,7 +162,7 @@ object ModuleReport {
   implicit val pickler: Pickler[ModuleReport] with Unpickler[ModuleReport] = PicklerUnpickler.generate[ModuleReport]
 }
 
-final class Caller(
+final case class Caller(
     val caller: ModuleID,
     val callerConfigurations: Seq[String],
     val callerExtraAttributes: Map[String, String],
@@ -170,8 +170,9 @@ final class Caller(
     val isChangingDependency: Boolean,
     val isTransitiveDependency: Boolean,
     val isDirectlyForceDependency: Boolean) {
-  override def toString: String =
-    s"$caller"
+  //override def toString: String =
+  //  s"$caller, "
+
 }
 object Caller {
   implicit val pickler: Pickler[Caller] with Unpickler[Caller] = PicklerUnpickler.generate[Caller]

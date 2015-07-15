@@ -67,6 +67,9 @@ object IvyRetrieve {
     }
 
   private[sbt] def moduleRevisionDetail(confReport: ConfigurationResolveReport, dep: IvyNode): ModuleReport = {
+
+    println(s"[moduleRevisionDetail] moduleId: ${dep.getModuleId()}")
+
     def toExtraAttributes(ea: ju.Map[_, _]): Map[String, String] =
       Map(ea.entrySet.toArray collect {
         case entry: ju.Map.Entry[_, _] if nonEmptyString(entry.getKey.toString).isDefined && nonEmptyString(entry.getValue.toString).isDefined =>
@@ -85,6 +88,7 @@ object IvyRetrieve {
         case Some(dd) => (toExtraAttributes(dd.getExtraAttributes), dd.isForce, dd.isChanging, dd.isTransitive, false)
         case None     => (Map.empty[String, String], false, false, true, false)
       }
+
       new Caller(m, callerConfigurations, extraAttributes, isForce, isChanging, isTransitive, isDirectlyForce)
     }
     val revId = dep.getResolvedId
@@ -137,9 +141,12 @@ object IvyRetrieve {
       }
       case _ => Nil
     }
-    val callers = dep.getCallers(confReport.getConfiguration).toArray.toVector map { toCaller }
-    val (resolved, missing) = artifacts(moduleId, confReport getDownloadReports revId)
+    val config = confReport.getConfiguration
+    val callers = dep.getCallers(config).toArray.toVector map { toCaller }
 
+    println(s"callers -----\n${callers.mkString("\n")}")
+
+    val (resolved, missing) = artifacts(moduleId, confReport getDownloadReports revId)
     new ModuleReport(moduleId, resolved, missing, status, publicationDate, resolver, artifactResolver,
       evicted, evictedData, evictedReason, problem, homepage, extraAttributes, isDefault, branch,
       configurations, licenses, callers)

@@ -37,13 +37,13 @@ private[sbt] object JsonUtil {
             mr.evicted, mr.evictedData, mr.evictedReason,
             mr.problem, mr.homepage, mr.extraAttributes,
             mr.isDefault, mr.branch, mr.configurations, mr.licenses,
-            if(evicted) filterOutArtificialCallers(mr.callers, log) else Seq.empty)
+            filterOutArtificialCallers(oar.modules.map { _.module }, mr.callers, log))
         })
       })
     })
   // #1763/#2030. Caller takes up 97% of space, so we need to shrink it down,
   // but there are semantics associated with some of them.
-  def filterOutArtificialCallers(callers: Seq[Caller], log: Logger): Seq[Caller] = {
+  def filterOutArtificialCallers(directDependencies: Seq[ModuleID], callers: Seq[Caller], log: Logger): Seq[Caller] = {
     //println(s"!! [filterOutArtificialCallers] ---- || prove that the filtering is the cause of the issue return an empty Seq - caller size: ${callers.size}")
     //Seq.empty
     //}
@@ -58,7 +58,8 @@ private[sbt] object JsonUtil {
 
       val nonArtificial = callers.filter { c =>
         (c.caller.organization != sbtOrgTemp) &&
-          (c.caller.organization != fakeCallerOrganization)
+          (c.caller.organization != fakeCallerOrganization) &&
+          directDependencies.contains(c.caller)
       }.distinct
 
       log.debug(s"[filterOutArtificialCallers] nonArtificial.size: ${nonArtificial.size}")
